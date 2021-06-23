@@ -1,12 +1,13 @@
 import { app, ipcMain, Notification } from 'electron'
 import { getAccountIdByViewId } from './account-views'
-import { getAccount, selectAccount } from './accounts'
+import { getAccount, selectAccount, getSelectedAccount } from './accounts'
 import { getMainWindow, sendToMainWindow } from './main-window'
 import config, { ConfigKey } from './config'
 import { is } from 'electron-util'
 import { updateTrayUnreadStatus } from './tray'
 import { Mail, UnreadCounts } from '../types'
 import { isEnabled as isDoNotDisturbEnabled } from '@sindresorhus/do-not-disturb'
+import { handleMailto } from './mailto'
 
 const unreadCounts: UnreadCounts = {}
 
@@ -134,4 +135,13 @@ export function handleGmail() {
       }
     })
   }
+
+  let isInitialMailtoHandled = false
+  ipcMain.on('gmail:ready', ({ sender }) => {
+    if (isInitialMailtoHandled) return
+    const accountId = getAccountIdByViewId(sender.id)
+    if (!accountId || accountId !== getSelectedAccount()?.id) return
+    isInitialMailtoHandled = true
+    handleMailto(process.argv[process.argv.length - 1])
+  })
 }
