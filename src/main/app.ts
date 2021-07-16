@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import config, { ConfigKey } from './config'
+import { handleMailto } from './mailto'
 import { getMainWindow } from './main-window'
-import { sendToSelectedAccountView } from './account-views'
 import { appId } from '../constants'
 
 let isQuittingApp = false
@@ -35,20 +35,20 @@ export async function initApp() {
     app.disableHardwareAcceleration()
   }
 
-  app.on('second-instance', () => {
+  app.on('second-instance', (_, argv) => {
     const mainWindow = getMainWindow()
-
     if (mainWindow) {
       if (mainWindow.isMinimized()) {
         mainWindow.restore()
       }
 
       mainWindow.show()
+      handleMailto(argv[argv.length - 1])
     }
   })
 
   app.on('open-url', (_event, mailto) => {
-    sendToSelectedAccountView('gmail:compose-mail', mailto.split(':')[1])
+    handleMailto(mailto)
   })
 
   app.on('activate', () => {

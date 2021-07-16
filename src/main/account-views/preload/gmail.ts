@@ -199,11 +199,109 @@ function parseNewMails(feedDocument: Document) {
   return newMails
 }
 
-function clickElement(selector: string) {
-  const element = document.querySelector<HTMLDivElement>(selector)
-  if (element) {
-    element.click()
+const nextTick = async () =>
+  new Promise((resolve) => {
+    setTimeout(resolve, 0)
+  })
+
+async function composeMail(
+  _event: IpcRendererEvent,
+  to?: string,
+  cc?: string | null,
+  bcc?: string | null,
+  subject?: string | null,
+  body?: string | null
+) {
+  // Can't use element ids as selectors since they aren't stable
+
+  const composeButton = await elementReady<HTMLDivElement>('div[gh="cm"]', {
+    stopOnDomReady: false,
+    timeout: 60000
+  })
+  if (!composeButton) throw new Error('No composeButton')
+  composeButton.click()
+
+  // Out of the "to" block because we use the readiness of this element to
+  // know when we can start filling out the fields
+  const toElement = await elementReady<HTMLTextAreaElement>(
+    'textarea[name="to"]',
+    {
+      stopOnDomReady: false,
+      timeout: 60000
+    }
+  )
+  const ccElement = document.querySelector<HTMLTextAreaElement>(
+    'textarea[name="cc"]'
+  )
+  const bccElement = document.querySelector<HTMLTextAreaElement>(
+    'textarea[name="bcc"]'
+  )
+  const subjectElement = document.querySelector<HTMLInputElement>(
+    'input[name="subjectbox"]'
+  )
+  const bodyElement = document.querySelector<HTMLDivElement>(
+    'div[aria-label="Message Body"]'
+  )
+
+  if (!toElement) throw new Error('No toElement')
+  if (!ccElement) throw new Error('No ccElement')
+  if (!bccElement) throw new Error('No bccElement')
+  if (!subjectElement) throw new Error('No subjectElement')
+  if (!bodyElement) throw new Error('No bodyElement')
+
+  if (to) {
+    toElement.focus()
+    toElement.value = to
+    await nextTick()
   }
+
+  // Why the nextTick at the end of each block? Because otherwise the
+  // fields that follow may fail to get focused for some reason. This
+  // isn't the original comment, see prior commits.
+
+  if (cc) {
+    document
+      .querySelector<HTMLSpanElement>(
+        'span[aria-label="Add Cc recipients ‪(Ctrl-Shift-C)‬"]'
+      )
+      ?.click()
+    ccElement.focus()
+    ccElement.value = cc
+    await nextTick()
+  }
+
+  if (bcc) {
+    document
+      .querySelector<HTMLSpanElement>(
+        'span[aria-label="Add Bcc recipients ‪(Ctrl-Shift-B)‬"]'
+      )
+      ?.click()
+    bccElement.focus()
+    bccElement.value = bcc
+    await nextTick()
+  }
+
+  if (subject) {
+    subjectElement.focus()
+    subjectElement.value = subject
+    await nextTick()
+  }
+
+  if (body) {
+    bodyElement.focus()
+    bodyElement.innerHTML = body
+    await nextTick()
+  }
+
+  /* eslint-disable no-negated-condition */
+  if (!to) {
+    toElement.focus()
+  } else if (!subject) {
+    subjectElement.focus()
+  } else {
+    bodyElement.focus()
+  }
+  /* eslint-enable no-negated-condition */
 }
 
 export function initGmail() {
@@ -254,42 +352,9 @@ export function initGmail() {
       }
     )
 
-    ipcRenderer.on('gmail:compose-mail', async (_event, to?: string) => {
-      clickElement('div[gh="cm"]')
+    ipcRenderer.on('gmail:compose-mail', composeMail)
 
-      if (!to) {
-        return
-      }
-
-      const toElement = await elementReady<HTMLTextAreaElement>(
-        'textarea[name="to"]',
-        {
-          stopOnDomReady: false,
-          timeout: 60000
-        }
-      )
-
-      if (!toElement) {
-        return
-      }
-
-      toElement.focus()
-      toElement.value = to
-
-      const subjectElement = document.querySelector<HTMLInputElement>(
-        'input[name="subjectbox"]'
-      )
-
-      if (!subjectElement) {
-        return
-      }
-
-      // The subject input can't be focused immediately after
-      // settings the "to" input value for an unknown reason.
-      setTimeout(() => {
-        subjectElement.focus()
-      }, 200)
-    })
+    ipcRenderer.send('gmail:ready')
 
     setInterval(() => {
       previousNewMails.clear()
